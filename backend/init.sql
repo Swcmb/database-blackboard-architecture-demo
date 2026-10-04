@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS analyses (
+    id SERIAL PRIMARY KEY,
+    content TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);

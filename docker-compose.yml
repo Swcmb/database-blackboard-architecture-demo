@@ -1,0 +1,73 @@
+services:
+  # ========== PostgreSQL 数据库 ==========
+  postgres-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: archdemo
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ========== Redis (可选) ==========
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ========== DB Service (传统数据库风格) ==========
+  db-service:
+    build:
+      context: ./backend
+      dockerfile: db_service/Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres-db:5432/archdemo
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/api/db/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ========== Blackboard Service (黑板风格) ==========
+  blackboard-service:
+    build:
+      context: ./backend
+      dockerfile: blackboard_service/Dockerfile
+    ports:
+      - "8002:8002"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/api/blackboard/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ========== Frontend (Nginx) ==========
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "9080:80"
+    depends_on:
+      - db-service
+      - blackboard-service
+
+volumes:
+  pgdata:
